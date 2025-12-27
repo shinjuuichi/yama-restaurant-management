@@ -1,0 +1,73 @@
+import { AuthService } from '@/services/AuthService'
+import axios from 'axios'
+import { enqueueSnackbar } from 'notistack'
+import { BASE_URL } from './ApiRequest'
+
+// Debug: Log BASE_URL để verify
+console.log('🔍 axiosFormData BASE_URL:', BASE_URL)
+
+const axiosFormData = axios.create({
+	baseURL: BASE_URL,
+	headers: {
+		'Content-Type': 'multipart/form-data',
+		'Access-Control-Allow-Origin': '*',
+		'Access-Control-Allow-Headers': 'X-Requested-With',
+	},
+})
+
+axiosFormData.interceptors.request.use(
+	(request) => {
+		const token = localStorage.getItem('token')
+		if (token) {
+			request.headers.Authorization = `Bearer ${token}`
+		}
+		return request
+	},
+	(error) => {
+		return Promise.reject(error)
+	}
+)
+
+axiosFormData.interceptors.response.use(
+	(response) => {
+		return response
+	},
+	(error) => {
+		const status = error.response?.status
+		const errorMessage = error.response?.data?.error || 'Internal Server Error'
+		switch (status) {
+			case 401:
+				enqueueSnackbar('Unauthorized', { variant: 'warning', autoHideDuration: 1000 })
+				setTimeout(() => {
+					AuthService.LOGOUT()
+				}, 1000)
+				break
+			case 403:
+				enqueueSnackbar('Access Denied', { variant: 'error', autoHideDuration: 1000 })
+				setTimeout(() => {
+					AuthService.LOGOUT()
+				}, 1000)
+				break
+			case 422:
+				errorMessage.forEach((error, index) => {
+					setTimeout(() => {
+						enqueueSnackbar(error, { variant: 'error' })
+					}, index * 500)
+				})
+				break
+			case 400:
+			case 404:
+			case 409:
+			case 500:
+				enqueueSnackbar(errorMessage, { variant: 'error' })
+				break
+
+			default:
+				enqueueSnackbar('Internal Server Error', { variant: 'error' })
+				break
+		}
+		return error
+	}
+)
+
+export default axiosFormData
